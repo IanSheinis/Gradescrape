@@ -26,7 +26,7 @@ class TestCalc(unittest.TestCase):
 
     # #Minutesuntilfuturetime
     # def test_minutes1(self):
-    #     time_after_52_minutes = dt.datetime.now() + dt.timedelta(minutes=52)
+    #     time_after_52_minutes = dt.datetime.now(tz = dt.timezone.utc) + dt.timedelta(minutes=52)
     #     value = gs.minutes_until_future_time(time_after_52_minutes)
     #     self.assertEqual(value, 52)
 if __name__ == '__main__':

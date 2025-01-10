@@ -51,6 +51,8 @@ def createCalender(name, end_time):
 
         now_minutes = minutes_until_future_time(end_time)
         if now_minutes > 40320: now_minutes = 40320
+        if now_minutes > 721: 
+            now_minutes = now_minutes - 721  #time now
         event = {
             'summary' : name,
             'start' : {
@@ -92,7 +94,7 @@ def minutes_until_future_time(future_datetime):
     Returns:
     - int: The number of minutes until the future datetime.
     """
-    now = dt.datetime.now()
+    now = dt.datetime.now(tz = dt.timezone.utc)
     if future_datetime <= now:
         raise ValueError("The provided datetime is not in the future.")
     
@@ -181,7 +183,7 @@ class GradespiderSpider(scrapy.Spider):
         '''
         
         #TODO change to [1] after
-        course_list = response.xpath('(//div[@class="courseList--term"])[2]/following-sibling::div[1]//a/@href').getall()
+        course_list = response.xpath('(//div[@class="courseList--term"])[1]/following-sibling::div[1]//a/@href').getall()
 
         for course in course_list:
             yield response.follow("https://www.gradescope.com" + course, callback = self.parse_course_page)
@@ -212,7 +214,6 @@ class GradespiderSpider(scrapy.Spider):
         sorted_assignments.reverse()
 
         print(sorted_assignments)
-        #TODO Create notification that assignment was added
         uploadListToCalendar(course_title, sorted_assignments)
         
         
