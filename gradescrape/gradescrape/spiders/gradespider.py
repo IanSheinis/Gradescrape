@@ -11,7 +11,8 @@ from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
 
 #TODO add function descriptions
-#env
+
+#Find the env file and load it, env should be one directory up
 current_dir = os.path.dirname(__file__)
 parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
 env_file = os.path.join(parent_dir, '.env')
@@ -24,9 +25,12 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 #Google workspace
 creds = None
-if os.path.exists("token.json"):
-    creds = Credentials.from_authorized_user_file("token.json")
-
+script_dir = os.path.dirname(os.path.realpath(__file__))
+token_path = os.path.join(script_dir, "token.json")
+#If token.json already exists
+if os.path.exists(token_path):
+    creds = Credentials.from_authorized_user_file(token_path)
+#else create token.json
 if not creds or not creds.valid:
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
@@ -36,23 +40,26 @@ if not creds or not creds.valid:
         file_path = os.path.join(parent_dir, 'credentials.json')
         flow = InstalledAppFlow.from_client_secrets_file(file_path, SCOPES)  
         creds = flow.run_local_server(port=0)
-
-    with open("token.json","w") as token:
+    #create token.json
+    with open(token_path,"w") as token:
         token.write(creds.to_json())
 
 def createCalender(name, end_time):
+    '''
+    Creates event in Google Calendar
+    '''
     try:
-        service = build("calendar", "v3", credentials=creds)
+        service = build("calendar", "v3", credentials=creds) #Build the connection to google calendar
 
-        start_time = end_time - dt.timedelta(hours=12)
+        start_time = end_time - dt.timedelta(hours=12) #Make the event last for 12 hours
 
-        #If there is already an event do nothing
-        if(event_exists(service, start_time, end_time, name)): return
+        if(event_exists(service, start_time, end_time, name)): return #If there is already an event exit
 
+        #Create a notification for the present
         now_minutes = minutes_until_future_time(end_time)
-        if now_minutes > 40320: now_minutes = 40320
+        if now_minutes > 40320: now_minutes = 40320 #Google Calendar has max of 40320 minute notification
         if now_minutes > 721: 
-            now_minutes = now_minutes - 721  #time now
+            now_minutes = now_minutes - 721  #Because the event is 12 hours, need to subtract 12 hours from notification
         event = {
             'summary' : name,
             'start' : {
@@ -79,7 +86,7 @@ def createCalender(name, end_time):
             },
         }
 
-        event = service.events().insert(calendarId='primary', body=event).execute()
+        event = service.events().insert(calendarId='primary', body=event).execute() #Creates the event
         print(f"Event created: {event.get('id')}")
     except HttpError as error:
         print(f"An error occurred: {error}")
@@ -130,6 +137,9 @@ def event_exists(service, start_time, end_time, summary):
     return False
 
 def uploadListToCalendar(course_title, sorted_assignments: list) -> None:
+    '''
+    If assignment date is after now then create an event
+    '''
     for assignment in sorted_assignments:
             assignment_date = dt.datetime.strptime(assignment[1], '%Y-%m-%d %H:%M:%S %z')
             datetime_now = dt.datetime.now(tz=dt.timezone.utc)
@@ -139,21 +149,9 @@ def uploadListToCalendar(course_title, sorted_assignments: list) -> None:
             else:
                 break
 
-# def CalendarTest(sorted_assignments: list) -> list:
-#     """
-#     Test if uploadListToCalender works
-#     """
-#     output = []
-#     for assignment in sorted_assignments:
-#             assignment_date = dt.datetime.strptime(assignment[1], '%Y-%m-%d %H:%M:%S %z')
-#             datetime_now = dt.datetime.now(tz=dt.timezone.utc)
-#             if(assignment_date > datetime_now):
-#                 output.append(assignment_date)
-#             else:
-#                 break
-#     return output
 class GradespiderSpider(scrapy.Spider):
     
+    #Necessary for scrapy spider
     name = "gradespider"
     allowed_domains = ["gradescope.com"]
     start_urls = ["https://gradescope.com"]
@@ -161,8 +159,11 @@ class GradespiderSpider(scrapy.Spider):
     
 
     def parse(self, response):
-        authenticity_token = response.css('input[name="authenticity_token"]::attr(value)').get()
-        utf8 = response.css('input[name="utf8"]::attr(value)').get()
+        '''
+        Logs into Gradescrope.com with env variables
+        '''
+        authenticity_token = response.css('input[name="authenticity_token"]::attr(value)').get() #Necessary login token
+        utf8 = response.css('input[name="utf8"]::attr(value)').get() #Not sure if this was necessary
 
         login_data = {
             "authenticity_token": authenticity_token,
@@ -179,10 +180,9 @@ class GradespiderSpider(scrapy.Spider):
 
     def after_login(self, response):
         '''
-        
+        Loops through all classes in current quarter
         '''
         
-        #TODO change to [1] after
         course_list = response.xpath('(//div[@class="courseList--term"])[1]/following-sibling::div[1]//a/@href').getall()
 
         for course in course_list:
@@ -203,8 +203,8 @@ class GradespiderSpider(scrapy.Spider):
         rows = response.xpath('//table[@id="assignments-student-table"]/tbody/tr')
 
         for row in rows:
-            name = row.xpath('.//th[@class="table--primaryLink"]/a/text()').get()
-            due_date = row.xpath('.//time[contains(@class, "submissionTimeChart--dueDate")][1]/@datetime').get()
+            name = row.xpath('.//th[@class="table--primaryLink"]/a/text()').get() #Gets assignment name
+            due_date = row.xpath('.//time[contains(@class, "submissionTimeChart--dueDate")][1]/@datetime').get() #Gets assignment date
 
             if name and due_date:
                 assignments.append((name.strip(), due_date.strip()))
@@ -214,7 +214,7 @@ class GradespiderSpider(scrapy.Spider):
         sorted_assignments.reverse()
 
         print(sorted_assignments)
-        uploadListToCalendar(course_title, sorted_assignments)
+        uploadListToCalendar(course_title, sorted_assignments) #Uploads to calendar assignments listed for current quarter
         
         
         
