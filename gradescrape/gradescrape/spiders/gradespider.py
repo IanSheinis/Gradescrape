@@ -7,6 +7,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from google.oauth2 import service_account
 
 from dotenv import load_dotenv
 
@@ -20,29 +21,37 @@ env_file = os.path.join(parent_dir, '.env')
 load_dotenv(env_file)
 gradescope_user = os.getenv('GRADESCOPE_USER')
 gradescope_pass = os.getenv('GRADESCOPE_PASS')
+calendar_id = os.getenv('CALENDAR_ID')
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 #Google workspace
-creds = None
-script_dir = os.path.dirname(os.path.realpath(__file__))
-token_path = os.path.join(script_dir, "token.json")
-#If token.json already exists
-if os.path.exists(token_path):
-    creds = Credentials.from_authorized_user_file(token_path)
-#else create token.json
-if not creds or not creds.valid:
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
 
-    else:
-        #Find credentials.json
-        file_path = os.path.join(parent_dir, 'credentials.json')
-        flow = InstalledAppFlow.from_client_secrets_file(file_path, SCOPES)  
-        creds = flow.run_local_server(port=0)
-    #create token.json
-    with open(token_path,"w") as token:
-        token.write(creds.to_json())
+# Construct the full path to the service account JSON file
+service_account_path = os.path.join(current_dir, "service-account.json")
+
+
+creds = service_account.Credentials.from_service_account_file(
+    service_account_path, scopes=SCOPES)
+# creds = None
+# script_dir = os.path.dirname(os.path.realpath(__file__))
+# token_path = os.path.join(script_dir, "token.json")
+# #If token.json already exists
+# if os.path.exists(token_path):
+#     creds = Credentials.from_authorized_user_file(token_path)
+# #else create token.json
+# if not creds or not creds.valid:
+#     if creds and creds.expired and creds.refresh_token:
+#         creds.refresh(Request())
+
+#     else:
+#         #Find credentials.json
+#         file_path = os.path.join(parent_dir, 'credentials.json')
+#         flow = InstalledAppFlow.from_client_secrets_file(file_path, SCOPES)  
+#         creds = flow.run_local_server(port=0)
+#     #create token.json
+#     with open(token_path,"w") as token:
+#         token.write(creds.to_json())
 
 def createCalender(name, end_time):
     '''
@@ -86,8 +95,9 @@ def createCalender(name, end_time):
             },
         }
 
-        event = service.events().insert(calendarId='primary', body=event).execute() #Creates the event
+        event = service.events().insert(calendarId=calendar_id, body=event).execute() #Creates the event
         print(f"Event created: {event.get('id')}")
+        print(f"View event: {event.get('htmlLink')}")
     except HttpError as error:
         print(f"An error occurred: {error}")
 
@@ -123,7 +133,7 @@ def event_exists(service, start_time, end_time, summary):
     time_max = end_time.isoformat() 
     
     events_result = service.events().list(
-        calendarId= "primary",
+        calendarId= calendar_id,
         timeMin=time_min,
         timeMax=time_max,
         singleEvents=True
